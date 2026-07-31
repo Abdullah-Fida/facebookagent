@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.env
+omni_bot.log
+sessions/
+nove-dashboard/node_modules/
+nove-dashboard/dist/
