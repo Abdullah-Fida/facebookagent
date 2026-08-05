@@ -31,8 +31,8 @@ CRITICAL RULE: DO NOT TRIGGER ACTIONS IF HE IS JUST ASKING A QUESTION. Only trig
 1. "test_email" — Send a test email to Abdullah's inbox. Use when he says "send test email".
 2. "modify_limits" — Change posting or stealth reply limits. You MUST include "limit_type" ("post" or "stealth") and "new_value" (integer). Use when he says "increase posts to 10".
 3. "generate_image" — Generate an AI news image. You MUST include "headline" (string) and "category" (string). Use when he says "generate an image about...".
-4. "create_post" — DRAFTS a new post. ONLY use this if he EXPLICITLY says "create a post", "draft a post", or "make a post". DO NOT use this if he just says "when do you post" or "are you posting".
-5. "publish_post" — PUBLISHES the currently drafted post. ONLY use this when he explicitly says "publish it", "send it", "post it to telegram now".
+4. "draft_new_content" — DRAFTS a completely new post by scraping the web. ONLY use this if he says "create a new post", "draft a post", "fetch news", or "make a post". DO NOT use this if he says "post it to channels"!
+5. "publish_to_channels" — PUBLISHES the already-drafted post to Telegram. ONLY use this when he explicitly says "publish it", "send it", or "post it on channels".
 6. "status" — Fetch live bot stats. Use when he says "what's the status", "how is the bot doing", "give me a report".
 7. "clear" — Dismiss the data panel. Use when he says "hide", "clear", "dismiss".
 8. "stealth_toggle" — Toggle the Stealth Marketer ON or OFF. Use when he says "turn on stealth", "turn off stealth".
@@ -494,7 +494,7 @@ function App() {
           } else {
             textToSpeak = "Image generation failed. The backend might be offline or Pollinations AI timed out.";
           }
-        } else if (response.action === 'create_post') {
+        } else if (response.action === 'draft_new_content') {
           textToSpeak = response.reply || "I am dispatching the sub-agent now, Abdullah. I will notify you when the post is ready.";
           actionItems = [
             { type: 'heading', value: 'Sub-Agent Deployed' },
@@ -562,7 +562,7 @@ function App() {
           })();
           
           // Do not return! Let the main flow render the "Sub-Agent Deployed" message.
-        } else if (response.action === 'publish_post') {
+        } else if (response.action === 'publish_to_channels') {
           const apiRes = await fetch(`${API_BASE}/api/publish_post`, { method: 'POST' });
           if (apiRes.ok) {
             textToSpeak = response.reply || "The post has been published to your channels, Abdullah!";
