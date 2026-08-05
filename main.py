@@ -113,7 +113,8 @@ async def main():
         target_groups=config.target_stealth_groups,
         engagement_rate=0.01,  # Start highly restricted
         notification_manager=notification_manager,
-        db=db
+        db=db,
+        session_string=config.stealth_session_string or config.telegram_session_string
     )
     
     # 9. Connect Telegram Broadcaster & Stealth Marketer

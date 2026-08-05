@@ -147,7 +147,8 @@ class TelegramBroadcaster:
             return 0
         try:
             entity = await self.client.get_entity(self.channel_username)
-            return getattr(entity, 'participants_count', 0)
+            count = getattr(entity, 'participants_count', 0)
+            return count if count is not None else 0
         except Exception as e:
             logger.error(f"Failed to get subscriber count: {e}")
             return 0
