@@ -11,9 +11,9 @@ logger = logging.getLogger("OmniBot.AI")
 
 # Model assignments for different tasks
 MODELS = {
-    "synthesizer": "openrouter/free",       # Complex reasoning (news synthesis)
-    "headline":    "openrouter/free",        # Short punchy headlines for images
-    "stealth":     "openrouter/free",        # Human-like stealth replies
+    "synthesizer": "meta-llama/llama-3.1-8b-instruct:free",
+    "headline":    "meta-llama/llama-3.1-8b-instruct:free",
+    "stealth":     "meta-llama/llama-3.1-8b-instruct:free",
 }
 
 
@@ -104,7 +104,7 @@ class AIEngine:
                     logger.warning("Authentication failed. Rotating API key...")
                 elif "404" in error_msg:
                     logger.warning(f"Model '{model}' not found. Trying fallback...")
-                    model = "openrouter/free"  # Fallback to auto-routed free model
+                    model = "meta-llama/llama-3.1-8b-instruct:free"  # Fallback to a highly reliable model
                 
                 has_more_keys = self._rotate_key()
                 attempts += 1
