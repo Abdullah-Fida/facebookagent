@@ -230,6 +230,7 @@ async def create_post_stream(request: Request, category: str = "all"):
                 if package.get("image_path"):
                     filename = os.path.basename(package["image_path"])
                     package["image_url"] = f"/generated_images/{filename}"
+                request.app.state.last_generated_package = package
                 await queue.put({"step": "result", "package": package})
             else:
                 await queue.put({"step": "error", "message": "Sub-agent failed to produce a content package. Check if news sources are reachable."})
@@ -512,6 +513,34 @@ async def stealth_connection_status(request: Request):
             return {"connected": False, "name": None, "status": sm.status if sm else {}}
     return {"connected": False, "name": None, "status": sm.status if sm else {}}
 
+@app.post("/api/publish_post")
+async def publish_post(request: Request):
+    """
+    Manually publishes the last generated post from the dashboard.
+    """
+    package = getattr(request.app.state, 'last_generated_package', None)
+    if not package:
+        raise HTTPException(status_code=400, detail="No post has been generated yet. Please create a post first.")
+        
+    broadcaster = getattr(request.app.state, 'telegram_broadcaster', None)
+    if not broadcaster:
+        raise HTTPException(status_code=500, detail="Telegram Broadcaster is not wired.")
+        
+    try:
+        # Publish to Telegram
+        success = await broadcaster.post(package)
+        
+        # We can also attempt to push to Twitter if available in the app state
+        # But this is just a quick push for Telegram
+        if hasattr(request.app.state, 'brain') and success:
+            request.app.state.brain.record_post()
+            
+        if success:
+            return {"success": True, "message": "Post published to Telegram successfully."}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to publish. Telegram Broadcaster returned False.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
