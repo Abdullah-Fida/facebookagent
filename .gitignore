@@ -1,7 +1,42 @@
-__pycache__/
-*.pyc
+# Secrets
 .env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Logs
+*.log
 omni_bot.log
-sessions/
-novi-dashboard/node_modules/
-novi-dashboard/dist/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Output Files
+story_test_output.txt
+assets/generated_images/*
+!assets/generated_images/.gitkeep

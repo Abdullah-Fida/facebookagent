@@ -11,9 +11,9 @@ logger = logging.getLogger("OmniBot.AI")
 
 # Model assignments for different tasks
 MODELS = {
-    "synthesizer": "meta-llama/llama-3.1-8b-instruct:free",
-    "headline":    "meta-llama/llama-3.1-8b-instruct:free",
-    "stealth":     "meta-llama/llama-3.1-8b-instruct:free",
+    "synthesizer": "openrouter/free",
+    "headline":    "openrouter/free",
+    "stealth":     "openrouter/free",
 }
 
 
@@ -24,24 +24,35 @@ class AIEngine:
     If all keys fail, it logs a critical alert to Supabase.
     """
     
-    def __init__(self, api_keys: List[str], db=None):
+    def __init__(self, api_keys: List[str]):
         if not api_keys:
             raise ValueError("At least one OpenRouter API key is required.")
         
         self.api_keys = api_keys
         self.current_key_index = 0
-        self.db = db  # Reference to SupabaseDB for logging alerts
         self._build_client()
         logger.info(f"AI Engine initialized with {len(api_keys)} API key(s).")
     
     def _build_client(self):
         """Builds an AsyncOpenAI client using the current API key."""
-        self.client = AsyncOpenAI(
-            api_key=self.api_keys[self.current_key_index],
-            base_url="https://openrouter.ai/api/v1"
-        )
+        current_key = self.api_keys[self.current_key_index]
+        
+        if current_key.startswith("gsk_"):
+            # It's a Groq API Key! Route to Groq.
+            self.client = AsyncOpenAI(
+                api_key=current_key,
+                base_url="https://api.groq.com/openai/v1"
+            )
+            logger.info("Using GROQ API (Lightning fast & high quality)")
+        else:
+            # OpenRouter fallback
+            self.client = AsyncOpenAI(
+                api_key=current_key,
+                base_url="https://openrouter.ai/api/v1"
+            )
+            
         logger.info(f"Using API key index {self.current_key_index} "
-                     f"({self.api_keys[self.current_key_index][:15]}...)")
+                     f"({current_key[:15]}...)")
     
     def _rotate_key(self) -> bool:
         """Rotates to the next API key. Returns False if all keys exhausted."""
@@ -64,11 +75,19 @@ class AIEngine:
             user_prompt: The user-facing prompt
             max_tokens: Maximum response length
             temperature: Creativity level (0.0 = factual, 1.0 = creative)
+            frequency_penalty: Penalty for repeating tokens
         
         Returns:
             The generated text, or None if all keys failed.
         """
-        model = MODELS.get(task, "openrouter/free")
+        current_key = self.api_keys[self.current_key_index]
+        
+        # If using Groq, force use their best multilingual model
+        if current_key.startswith("gsk_"):
+            model = "llama-3.3-70b-versatile"
+        else:
+            model = MODELS.get(task, "openrouter/free")
+            
         attempts = 0
         max_attempts = len(self.api_keys) * 2  # Try each key up to twice
         
@@ -104,7 +123,7 @@ class AIEngine:
                     logger.warning("Authentication failed. Rotating API key...")
                 elif "404" in error_msg:
                     logger.warning(f"Model '{model}' not found. Trying fallback...")
-                    model = "meta-llama/llama-3.1-8b-instruct:free"  # Fallback to a highly reliable model
+                    model = "openrouter/free"  # Fallback to a highly reliable model
                 
                 has_more_keys = self._rotate_key()
                 attempts += 1
@@ -112,154 +131,65 @@ class AIEngine:
                 if not has_more_keys and attempts >= len(self.api_keys):
                     # All keys exhausted, log critical alert
                     logger.critical("ALL API KEYS EXHAUSTED. Cannot generate content.")
-                    if self.db:
-                        await self.db.log_alert(
-                            level="CRITICAL",
-                            module="AIEngine",
-                            message=f"All {len(self.api_keys)} API keys failed. Last error: {error_msg}"
-                        )
                     return None
         
         return None
     
-    async def synthesize_news(self, raw_articles: List[Dict], niche_context: str) -> Optional[Dict]:
+    async def generate_story(self) -> Optional[Dict]:
         """
-        Takes 2-3 raw news articles about the same story and synthesizes them
-        into a Daily Pulse PK post with Pakistani/South Asian lens.
-        
-        Returns a dict with 'telegram_text' and 'tweet_text' keys.
+        Generates a purely fictional, emotional local Pakistani story in Urdu.
+        Returns a dict with 'story_text' and 'headline'.
         """
-        # Build the source material
-        sources_text = ""
-        source_credits = []
-        for i, article in enumerate(raw_articles, 1):
-            sources_text += f"\n--- Source {i}: {article.get('source', 'Unknown')} ---\n"
-            sources_text += f"Title: {article.get('title', '')}\n"
-            sources_text += f"Summary: {article.get('summary', '')}\n"
-            source_credits.append(article.get('source', 'Unknown'))
-        
-        credit_line = ", ".join(set(source_credits))
-        
-        system_prompt = """You are a senior news editor for "Daily Pulse" — a Telegram channel 
-that delivers International News, Crypto/Web3, Business, Tech & Pakistani news to a global audience.
-
+        system_prompt = """You are a master storyteller and native Urdu speaker writing for a Facebook Page. 
 Your writing style:
-- Write strictly in 100% professional, flawless English. Do NOT use any Urdu words or phrases.
-- Professional but conversational tone — like a smart friend explaining news over coffee.
-- For crypto news: Focus on market impact, price action, regulatory changes, and investor insights.
-- For Pakistani news: Explain WHY this matters for Pakistan, the rupee, or South Asian economies.
-- For international news: Explain the global significance and broader implications.
-- Use a lot of relevant emojis heavily to make the post highly visual, engaging, and fun (5+ emojis per post).
-- NEVER copy-paste from sources. Synthesize in your own words.
-- Credit sources at the end with "via [Source Name]"
-- Keep posts to 3-5 lines maximum"""
+- Write strictly in flawless, eloquent, standard Urdu (using the Urdu/Arabic script).
+- CRITICAL: DO NOT use any Arabic diacritics (Harakat / Zabar, Zer, Pesh, Shad). Write in plain text standard Urdu only.
+- Do NOT repeat sentences, phrases, or symbols. Keep the story moving forward.
+- Create a deeply emotional, engaging, and beautiful fictional story set in Pakistan.
+- Focus on the human element, local Pakistani culture, everyday struggles, triumphs, or heartwarming moments.
+- The story MUST be complete. It must have a clear beginning, middle, and a very satisfying, proper emotional ending. Do not cut off abruptly.
+- Keep the story suitable for a Facebook Post (engaging, visually spaced, moderate use of emojis, but keep it within Facebook's character limit).
+- Add an emotional or thought-provoking concluding question or statement at the very end to encourage Facebook comments.
+- DO NOT mention that this is an AI-generated story. Make it feel real and authentic."""
 
-        user_prompt = f"""Read the following news sources. Your task is to output the final written content ONLY. DO NOT output your thought process. DO NOT repeat these instructions back to me. Output ONLY the raw final posts matching the requested formatting below.
+        import random
+        themes = [
+            "A struggling street food vendor in Lahore who experiences an unexpected act of immense kindness from a stranger.",
+            "A dedicated school teacher in a remote village of Gilgit-Baltistan who changes a young orphan's life forever.",
+            "The silent sacrifices of a mother in Karachi trying to afford her daughter's medical education.",
+            "Two childhood friends from different backgrounds in Peshawar who reunite after decades to fulfill a childhood promise.",
+            "An elderly watchmaker in Rawalpindi who fixes a broken pocket watch that reunites a broken family.",
+            "A hardworking farmer in Punjab who loses his crop to a storm, but his entire village steps in to save him.",
+            "A young boy in Quetta who works at a tea stall but dreams of becoming a pilot, and the kind customer who helps him.",
+            "The emotional bond between a grandfather and his granddaughter as they prepare for a traditional family wedding in Multan.",
+            "A brave Edhi ambulance driver who risks his life during heavy monsoon rains to save a stranded family.",
+            "A talented but poor artist in a bustling bazaar whose art is finally recognized by someone who understands his pain."
+        ]
+        selected_theme = random.choice(themes)
 
-1. A TELEGRAM POST (3-5 lines, strictly in English, with global/crypto/Pakistani lens as appropriate and source credit, lots of emojis)
-2. A TWEET (max 280 chars, strictly in English, punchy, with 1-2 hashtags)
-3. A REDDIT POST with a title and body (strictly in English, informative, neutral tone)
-
-Format your response EXACTLY like this (do not include anything outside of these tags):
----TELEGRAM---
-[write telegram post here]
----TWEET---
-[write tweet here]
----REDDIT_TITLE---
-[write reddit title]
----REDDIT_BODY---
-[write reddit body]
----END---
-
-Context: {niche_context}
-
-Sources:
-{sources_text}
-
-Credit line to use: via {credit_line}"""
-
+        user_prompt = f"Please write a new, beautiful, and fully complete emotional local Pakistani story for our Facebook page based strictly on this specific theme: '{selected_theme}'. Ensure the Urdu grammar is perfect, the characters feel real, and the story does not cut off. Also provide a short 5-8 word headline at the very top of your response in English, formatted as 'HEADLINE: [your headline]'. Then write the full Urdu story below it."
 
         result = await self.generate(
             task="synthesizer",
             system_prompt=system_prompt,
             user_prompt=user_prompt,
-            max_tokens=800,
-            temperature=0.7
+            max_tokens=3000,
+            temperature=0.3
         )
         
         if not result:
             return None
-        
-        # Parse the structured response
-        telegram_text = ""
-        tweet_text = ""
-        reddit_title = ""
-        reddit_body = ""
-        
-        try:
-            # Safer parsing with regex or basic string splitting that doesn't crash on missing markers
-            import re
             
-            # Extract Telegram
-            tg_match = re.search(r'---TELEGRAM---(.*?)(?:---TWEET---|---REDDIT_TITLE---|---END---|$)', result, re.DOTALL)
-            if tg_match:
-                telegram_text = tg_match.group(1).strip()
-            else:
-                telegram_text = result.strip()
-                
-            # Extract Tweet
-            tw_match = re.search(r'---TWEET---(.*?)(?:---REDDIT_TITLE---|---REDDIT_BODY---|---END---|$)', result, re.DOTALL)
-            if tw_match:
-                tweet_text = tw_match.group(1).strip()
-            else:
-                # If no tweet, generate a dummy tweet from telegram
-                tweet_text = telegram_text[:270] + "..." if len(telegram_text) > 270 else telegram_text
-                
-            # Extract Reddit
-            rt_match = re.search(r'---REDDIT_TITLE---(.*?)(?:---REDDIT_BODY---|---END---|$)', result, re.DOTALL)
-            if rt_match:
-                reddit_title = rt_match.group(1).strip()
-            
-            rb_match = re.search(r'---REDDIT_BODY---(.*?)(?:---END---|$)', result, re.DOTALL)
-            if rb_match:
-                reddit_body = rb_match.group(1).strip()
-                
-        except Exception as e:
-            logger.error(f"Regex parsing failed: {e}")
-            telegram_text = result.strip()
-            tweet_text = telegram_text[:270] + "..."
+        # Parse out the headline
+        headline = "Emotional Story"
+        story_text = result.strip()
+        
+        lines = result.strip().split('\n')
+        if lines and lines[0].strip().startswith("HEADLINE:"):
+            headline = lines[0].replace("HEADLINE:", "").strip()
+            story_text = "\n".join(lines[1:]).strip()
         
         return {
-            "telegram_text": telegram_text,
-            "tweet_text": tweet_text,
-            "reddit_title": reddit_title,
-            "reddit_body": reddit_body,
-            "source_credits": credit_line
+            "story_text": story_text,
+            "headline": headline
         }
-    
-    async def generate_image_headline(self, telegram_text: str) -> Optional[str]:
-        """Generates a short, punchy 5-8 word headline for the PIL image overlay."""
-        system_prompt = (
-            "You are a headline writer. You output ONLY a short punchy news headline of 5-8 words. "
-            "No quotes, no explanations, no preamble, no questions. Just the headline text itself. "
-            "Example input: 'The Federal Reserve held interest rates today...'"
-            "Example output: Fed Holds Rates Amid Inflation Fears"
-        )
-        user_prompt = f"Write a 5-8 word headline for this news:\n\n{telegram_text[:300]}"
-        
-        result = await self.generate(
-            task="headline",
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            max_tokens=30,
-            temperature=0.5
-        )
-        
-        if result:
-            # Strip any quotes or extra formatting the AI might add
-            result = result.strip('"\'\'\n').strip()
-            # If it's too long (AI went rogue), truncate
-            if len(result.split()) > 12:
-                result = ' '.join(result.split()[:8])
-        
-        return result
