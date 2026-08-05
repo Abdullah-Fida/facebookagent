@@ -161,9 +161,10 @@ class ContentEngine:
         )
 
         if article_record:
-            site_url = "https://dailypulse.pk"
-            article_link = f"\n\n📖 <b>Read Full Detailed Article:</b>\n{site_url}/{article_record['slug']}"
-            telegram_text += article_link
+            # We don't have a domain yet, so skip the website link for now.
+            # article_link = f"\n\n📖 <b>Read Full Detailed Article:</b>\nhttps://novinetwork.com/{article_record['slug']}"
+            # telegram_text += article_link
+            pass
 
         # 7. Build and return content package
         self.posts_generated_today += 1

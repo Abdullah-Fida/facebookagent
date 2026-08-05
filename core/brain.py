@@ -55,6 +55,10 @@ class BotBrain:
         self.errors_today = 0
         self.auto_fixes_today = 0
         
+        # Memory Tracking
+        self.posted_categories = []
+        self.posted_topics = []
+        
         # Dynamic throttle limits
         self.max_posts_today = 6
         self.max_replies_today = 8
@@ -124,11 +128,13 @@ class BotBrain:
             return False
         return True
     
-    def record_post(self):
-        """Records that a post was made."""
+    def record_post(self, category: str = "general", topic: str = "general"):
+        """Records that a post was made, tracking category and topic."""
         self.posts_today += 1
         self.last_post_time = self._get_pkt_now()
-        logger.info(f"Post recorded. Today's total: {self.posts_today}/{self.max_posts_today}")
+        self.posted_categories.append(category)
+        self.posted_topics.append(topic)
+        logger.info(f"Post recorded [{category}]. Today's total: {self.posts_today}/{self.max_posts_today}")
     
     def can_reply(self) -> bool:
         """Checks if we're within daily reply limits (for Stealth Marketer)."""
@@ -241,6 +247,8 @@ class BotBrain:
         self.replies_today = 0
         self.errors_today = 0
         self.auto_fixes_today = 0
+        self.posted_categories.clear()
+        self.posted_topics.clear()
         self.max_replies_today = 8  # Reset to default
     
     def get_status_report(self) -> str:

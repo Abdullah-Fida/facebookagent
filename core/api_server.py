@@ -256,6 +256,37 @@ async def create_post_stream(request: Request, category: str = "all"):
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
+class ChatProxyRequest(BaseModel):
+    api_key: str
+    systemPrompt: str
+    input: str
+
+@app.post("/api/chat")
+async def chat_proxy(req: ChatProxyRequest):
+    import aiohttp
+    headers = {
+        "Authorization": f"Bearer {req.api_key}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": "llama-3.1-8b-instant",
+        "messages": [
+            {"role": "system", "content": req.systemPrompt},
+            {"role": "user", "content": req.input}
+        ],
+        "temperature": 0.7
+    }
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers, timeout=15.0) as resp:
+                data = await resp.json()
+                if resp.status != 200:
+                    return {"error": {"message": data.get("error", {}).get("message", f"HTTP {resp.status}")}}
+                return data
+    except Exception as e:
+        return {"error": {"message": f"Backend Proxy Error: {str(e)}"}}
+
+
 # ═══════════════════════════════════════════════════════════
 #  KEEP-ALIVE PING (Render Free Tier)
 # ═══════════════════════════════════════════════════════════
@@ -263,7 +294,7 @@ async def create_post_stream(request: Request, category: str = "all"):
 @app.get("/ping")
 async def ping():
     """Keep-alive endpoint for Render free tier. Pinged every 10 minutes."""
-    return {"status": "alive", "message": "NOVE is running."}
+    return {"status": "alive", "message": "NOVI is running."}
 
 
 # ═══════════════════════════════════════════════════════════
@@ -449,13 +480,24 @@ async def stealth_submit_code(req: TelegramCodeSubmit, request: Request):
 @app.get("/api/telegram/connection_status")
 async def telegram_connection_status(request: Request):
     """Returns whether the main Telegram account is connected."""
+    # Check the Broadcaster Telethon client first
+    broadcaster = getattr(request.app.state, 'telegram_broadcaster', None)
+    if broadcaster and broadcaster.is_ready and broadcaster.client:
+        try:
+            me = await broadcaster.client.get_me()
+            return {"connected": True, "name": me.first_name, "phone": getattr(me, 'phone', 'Personal Account')}
+        except Exception:
+            pass
+
+    # Fallback to user client if using dashboard login
     client = getattr(request.app.state, 'telegram_user_client', None)
     if client and client.is_connected():
         try:
             me = await client.get_me()
-            return {"connected": True, "name": me.first_name, "phone": me.phone}
+            return {"connected": True, "name": me.first_name, "phone": getattr(me, 'phone', None)}
         except Exception:
-            return {"connected": False, "name": None, "phone": None}
+            pass
+            
     return {"connected": False, "name": None, "phone": None}
 
 @app.get("/api/stealth/connection_status")

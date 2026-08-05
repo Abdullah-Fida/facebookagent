@@ -1,6 +1,6 @@
 """
 Article Agent Module.
-Subagent under NOVE that takes raw news packages and expands them into 
+Subagent under NOVI that takes raw news packages and expands them into 
 1,000+ word SEO-optimized HTML articles with dynamic slugs and metadata for the website.
 """
 import logging
@@ -67,7 +67,7 @@ class ArticleAgent:
                 "main_image_url": main_image_url,
                 "category": category,
                 "seo_keywords": seo_keywords,
-                "author": "NOVE ArticleAgent"
+                "author": "NOVI ArticleAgent"
             }
 
             # Save to Supabase if DB is initialized

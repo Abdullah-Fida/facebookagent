@@ -10,62 +10,48 @@ import asyncio
 import os
 from typing import Optional, Dict
 
-try:
-    from telegram import Bot
-except ImportError:
-    Bot = None
+from telethon import TelegramClient
+from telethon.sessions import StringSession
+from telethon.errors import FloodWaitError
 
 logger = logging.getLogger("OmniBot.Broadcaster")
 
-
 class TelegramBroadcaster:
-    """
-    Handles auto-posting of generated content to the Telegram channel.
-    Uses the official Bot API (safe, no risk of ban on the bot itself).
-    """
-
-    # Telegram photo upload limit (10MB)
     MAX_PHOTO_SIZE_BYTES = 10 * 1024 * 1024
 
-    def __init__(self, bot_token: str, channel_username: str, 
-                 notification_manager=None, db=None):
-        """
-        Args:
-            bot_token: The Telegram Bot Token from @BotFather.
-            channel_username: Channel to post to, e.g. '@DailyPulsePK'.
-            notification_manager: For sending email notifications after each action.
-            db: Supabase DB instance for logging posts.
-        """
-        self.bot_token = bot_token
+    def __init__(self, api_id: int, api_hash: str, session_string: str, channel_username: str, 
+                 notification_manager=None, db=None, brain=None):
+        self.api_id = api_id
+        self.api_hash = api_hash
+        self.session_string = session_string
         self.channel_username = channel_username
         self.nm = notification_manager
         self.db = db
-        self.bot: Optional[Bot] = None
+        self.brain = brain
+        self.client: Optional[TelegramClient] = None
         self._initialized = False
         self.posts_sent = 0
 
     async def connect(self):
-        """Initialize the Telegram Bot client."""
-        if not self.bot_token or self.bot_token == "your_bot_token":
-            logger.warning("Telegram Bot Token not configured. Broadcaster disabled.")
-            return
-
-        if Bot is None:
-            logger.error("python-telegram-bot not installed. Run: pip install python-telegram-bot")
+        if not self.api_id or not self.api_hash or not self.session_string:
+            logger.warning("Telegram API credentials or Session String missing. Broadcaster disabled.")
             return
 
         try:
-            self.bot = Bot(token=self.bot_token)
-            me = await self.bot.get_me()
+            self.client = TelegramClient(StringSession(self.session_string), self.api_id, self.api_hash)
+            await self.client.connect()
+            
+            if not await self.client.is_user_authorized():
+                logger.error("Session string is invalid or expired. Broadcaster not authorized.")
+                return
+
+            me = await self.client.get_me()
             self._initialized = True
-            logger.info(f"Telegram Broadcaster initialized as @{me.username}")
+            logger.info(f"Telegram Broadcaster initialized as {me.first_name} (Telethon mode). Target: {self.channel_username}")
         except Exception as e:
-            logger.error(f"Failed to initialize Telegram Bot: {e}")
+            logger.error(f"Failed to initialize Telegram Client: {e}")
 
     async def post(self, package: Dict) -> bool:
-        """
-        Publishes a content package to the Telegram channel.
-        """
         if not self._initialized:
             logger.warning("Broadcaster not initialized. Skipping broadcast.")
             return False
@@ -79,7 +65,6 @@ class TelegramBroadcaster:
 
         try:
             if image_path and os.path.exists(image_path):
-                # Validate image size
                 file_size = os.path.getsize(image_path)
                 if file_size > self.MAX_PHOTO_SIZE_BYTES:
                     logger.warning(f"Image too large ({file_size / 1024 / 1024:.1f}MB). Sending text-only.")
@@ -93,7 +78,11 @@ class TelegramBroadcaster:
             self.posts_sent += 1
             logger.info(f"Successfully broadcast post #{self.posts_sent} to {self.channel_username}")
 
-            # Log to database
+            # Update Brain subscriber count
+            sub_count = await self.get_subscriber_count()
+            if self.brain:
+                self.brain.current_subscribers = sub_count
+
             if self.db:
                 await self.db.log_post(
                     platform="telegram_channel",
@@ -104,7 +93,6 @@ class TelegramBroadcaster:
                               "source_credits": package.get("source_credits", "")}
                 )
 
-            # Send detailed email notification for the successful post
             if self.nm:
                 title = package.get("original_title", "News Post")
                 await self.nm.notify_post_success(
@@ -112,20 +100,17 @@ class TelegramBroadcaster:
                     category=package.get('category', 'N/A'),
                     channel=self.channel_username,
                     posts_today=self.posts_sent,
-                    total_max=6  # Default max from brain
+                    total_max=6
                 )
-
             return True
 
+        except FloodWaitError as e:
+            logger.warning(f"FloodWait detected! Backing off for {e.seconds} seconds.")
+            await asyncio.sleep(e.seconds)
+            return False
         except Exception as e:
             error_msg = str(e)
             logger.error(f"Broadcast failed: {error_msg}")
-
-            # Handle FloodWait specifically
-            if "flood" in error_msg.lower() or "retry" in error_msg.lower():
-                logger.warning("FloodWait detected! Backing off for 60 seconds.")
-                await asyncio.sleep(60)
-
             if self.nm:
                 await self.nm.send_notification(
                     subject="Broadcast FAILED",
@@ -135,45 +120,42 @@ class TelegramBroadcaster:
             return False
 
     async def _send_photo_with_caption(self, image_path: str, caption: str):
-        """Sends a photo with caption to the channel. Truncates caption to Telegram's 1024 char limit."""
         if len(caption) > 1024:
             caption = caption[:1020] + "..."
 
-        with open(image_path, "rb") as photo_file:
-            await self.bot.send_photo(
-                chat_id=self.channel_username,
-                photo=photo_file,
-                caption=caption,
-                parse_mode="HTML"
-            )
+        await self.client.send_file(
+            self.channel_username,
+            file=image_path,
+            caption=caption,
+            parse_mode="HTML"
+        )
         logger.info("Photo + caption sent successfully.")
 
     async def _send_text_only(self, text: str):
-        """Sends a text-only message to the channel."""
         if len(text) > 4096:
             text = text[:4092] + "..."
 
-        await self.bot.send_message(
-            chat_id=self.channel_username,
-            text=text,
+        await self.client.send_message(
+            self.channel_username,
+            message=text,
             parse_mode="HTML"
         )
         logger.info("Text-only message sent successfully.")
 
     async def get_subscriber_count(self) -> int:
-        """Returns the current subscriber count of the channel."""
         if not self._initialized or not self.channel_username:
             return 0
         try:
-            count = await self.bot.get_chat_member_count(chat_id=self.channel_username)
-            return count or 0
+            entity = await self.client.get_entity(self.channel_username)
+            return getattr(entity, 'participants_count', 0)
         except Exception as e:
             logger.error(f"Failed to get subscriber count: {e}")
             return 0
 
     async def disconnect(self):
-        """Disconnect the Telegram client (no-op for python-telegram-bot)."""
-        logger.info("Telegram Broadcaster shut down.")
+        if self.client:
+            await self.client.disconnect()
+            logger.info("Telegram Broadcaster shut down.")
 
     @property
     def is_ready(self) -> bool:

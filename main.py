@@ -25,6 +25,7 @@ from modules.content_engine import ContentEngine
 from modules.telegram_broadcaster import TelegramBroadcaster
 from modules.stealth_marketer import StealthMarketer
 from modules.reddit_broadcaster import RedditBroadcaster
+from modules.twitter_broadcaster import TwitterBroadcaster
 from modules.notification_manager import NotificationManager
 import uvicorn
 from core.api_server import app as api_app
@@ -78,13 +79,7 @@ async def main():
         db=db
     )
     
-    # 6. Initialize Telegram Broadcaster
-    broadcaster = TelegramBroadcaster(
-        bot_token=config.telegram_bot_token,
-        channel_username=config.channel_username,
-        notification_manager=notification_manager,
-        db=db
-    )
+    # Telegram Broadcaster is initialized later (step 9) to include the Brain dependency
     
     # 7. Initialize Reddit Broadcaster
     reddit_broadcaster = RedditBroadcaster(
@@ -96,10 +91,18 @@ async def main():
         db=db
     )
     
+    # 7.5 Initialize Twitter Broadcaster
+    twitter_broadcaster = TwitterBroadcaster(
+        username=config.twitter_username,
+        password=config.twitter_password,
+        email=config.twitter_email,
+        db=db
+    )
+    
     # 8. Initialize The Brain
     brain = BotBrain(db=db, weekly_goal=config.weekly_subscriber_goal, notification_manager=notification_manager)
     
-    # 8. Initialize Stealth Marketer (Inactive initially, controllable by NOVE)
+    # 8. Initialize Stealth Marketer (Inactive initially, controllable by NOVI)
     stealth_marketer = StealthMarketer(
         api_id=config.telegram_api_id,
         api_hash=config.telegram_api_hash,
@@ -115,25 +118,31 @@ async def main():
     
     # 9. Connect Telegram Broadcaster & Stealth Marketer
     telegram_connected = False
-    if config.telegram_bot_token and config.channel_username:
-        try:
-            await broadcaster.connect()
-            if broadcaster.is_ready:
-                telegram_connected = True
-                
-                # Get initial subscriber count
-                sub_count = await broadcaster.get_subscriber_count()
-                brain.week_start_subscribers = sub_count
-                brain.current_subscribers = sub_count
-                logger.info(f"Initial subscriber count: {sub_count}")
+    broadcaster = TelegramBroadcaster(
+        api_id=config.telegram_api_id,
+        api_hash=config.telegram_api_hash,
+        session_string=config.telegram_session_string,
+        channel_username=config.channel_username,
+        notification_manager=notification_manager,
+        db=db,
+        brain=brain
+    )
+    try:
+        await broadcaster.connect()
+        if broadcaster.is_ready:
+            telegram_connected = True
             
-            # Start Stealth Marketer (which uses its own Telethon client in the background)
-            await stealth_marketer.connect()
-        except Exception as e:
-            logger.error(f"Failed to connect Telegram Broadcaster: {e}")
-            await brain.handle_error("TelegramBroadcaster", e)
-    else:
-        logger.warning("Telegram Bot Token not configured. Running in content-generation-only mode.")
+            # Get initial subscriber count
+            sub_count = await broadcaster.get_subscriber_count()
+            brain.week_start_subscribers = sub_count
+            brain.current_subscribers = sub_count
+            logger.info(f"Initial subscriber count: {sub_count}")
+        
+        # Start Stealth Marketer (which uses its own Telethon client in the background)
+        await stealth_marketer.connect()
+    except Exception as e:
+        logger.error(f"Failed to connect Telegram Broadcaster: {e}")
+        await brain.handle_error("TelegramBroadcaster", e)
     
     # 10. Start API Server
     logger.info("Starting Dashboard API server on port 8000...")
@@ -141,6 +150,7 @@ async def main():
     api_app.state.notification_manager = notification_manager
     api_app.state.stealth_marketer = stealth_marketer
     api_app.state.content_engine = content_engine
+    api_app.state.telegram_broadcaster = broadcaster
     api_app.state.config = config  # Pass config for OTP auth endpoints
     
     server_port = int(os.environ.get("PORT", 8000))
@@ -264,6 +274,9 @@ async def main():
                                 # Try Reddit if within daily limits
                                 if brain.posts_today <= brain.max_posts_today // 2: # Keep reddit volume lower
                                     await reddit_broadcaster.post(package)
+                                
+                                # Broadcast to Twitter
+                                await twitter_broadcaster.post(package)
                             else:
                                 await brain.handle_error(
                                     "TelegramBroadcaster",

@@ -27,7 +27,7 @@ def _get_pkt_now_str() -> str:
 class NotificationManager:
     """
     Sends rich HTML email notifications using Gmail SMTP.
-    Every action NOVE takes is reported via email to keep the admin fully informed.
+    Every action NOVI takes is reported via email to keep the admin fully informed.
     Requires a Gmail App Password (not your regular password).
     """
     def __init__(self, sender_email: str, app_password: str, receiver_email: str,
@@ -61,7 +61,7 @@ class NotificationManager:
                 <!-- Header -->
                 <div style="background: linear-gradient(135deg, {accent_color}, #1a1a2e); padding: 24px 28px; border-bottom: 1px solid #30363d;">
                     <h1 style="margin:0; color: #ffffff; font-size: 18px; font-weight: 600; letter-spacing: 1px;">
-                        🤖 NOVE — System Notification
+                        🤖 NOVI — System Notification
                     </h1>
                     <p style="margin: 6px 0 0; color: rgba(255,255,255,0.6); font-size: 12px;">{_get_pkt_now_str()}</p>
                 </div>
@@ -72,7 +72,7 @@ class NotificationManager:
                 </div>
                 <!-- Footer -->
                 <div style="padding: 16px 28px; background: #0d1117; border-top: 1px solid #30363d; text-align: center;">
-                    <p style="margin:0; color: #484f58; font-size: 11px;">NOVE — Omni-Channel Bot System • Automated Notification</p>
+                    <p style="margin:0; color: #484f58; font-size: 11px;">NOVI — Omni-Channel Bot System • Automated Notification</p>
                 </div>
             </div>
         </body>
@@ -86,7 +86,7 @@ class NotificationManager:
         """
         try:
             msg = MIMEMultipart("alternative")
-            msg['From'] = f"NOVE Bot <{self.sender_email}>"
+            msg['From'] = f"NOVI Bot <{self.sender_email}>"
             msg['To'] = self.receiver_email
             msg['Subject'] = full_subject
 
@@ -226,7 +226,7 @@ class NotificationManager:
             await asyncio.to_thread(self._send_email_sync, full_subject, html)
 
     async def notify_strategy_change(self, change_type: str, old_value: str, new_value: str, reason: str = ""):
-        """Sends email when NOVE changes its posting strategy or limits."""
+        """Sends email when NOVI changes its posting strategy or limits."""
         body = f"""
         <div style="background: #1a1a2e; border: 1px solid #6366f1; border-radius: 8px; padding: 16px;">
             <p style="color: #818cf8; font-weight: 600; margin: 0 0 8px;">📊 Strategy Updated — {change_type}</p>

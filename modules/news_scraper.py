@@ -43,6 +43,10 @@ RSS_FEEDS = {
         {"url": "https://www.geo.tv/rss/1/0", "source": "Geo News"},
         {"url": "https://tribune.com.pk/feed/home", "source": "Express Tribune"},
     ],
+    "sports_news": [
+        {"url": "https://www.espncricinfo.com/rss/content/story/feeds/0.xml", "source": "ESPN Cricinfo"},
+        {"url": "https://www.skysports.com/rss/12040", "source": "Sky Sports"},
+    ],
 }
 
 # Keywords that indicate Pakistan/South Asia relevance (for priority boosting)

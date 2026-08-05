@@ -28,16 +28,17 @@ class BotConfig:
     telegram_api_id: int = 0
     telegram_api_hash: str = ""
     telegram_phone: str = ""
+    telegram_session_string: str = ""
     stealth_phone: str = ""  # Burner phone for stealth marketer
+    stealth_session_string: str = ""
     channel_username: str = ""
     admin_user_id: int = 0
     target_stealth_groups: List[str] = field(default_factory=list)
     
-    # X (Twitter)
-    x_api_key: str = ""
-    x_api_secret: str = ""
-    x_access_token: str = ""
-    x_access_secret: str = ""
+    # Twitter (X) Browser Automation
+    twitter_username: str = ""
+    twitter_password: str = ""
+    twitter_email: str = ""
     
     # Reddit
     reddit_client_id: str = ""
@@ -83,14 +84,15 @@ def load_config() -> BotConfig:
         telegram_api_id=int(os.getenv("TELEGRAM_API_ID", "0")),
         telegram_api_hash=os.getenv("TELEGRAM_API_HASH", ""),
         telegram_phone=os.getenv("TELEGRAM_PHONE", ""),
+        telegram_session_string=os.getenv("TELEGRAM_SESSION_STRING", ""),
         stealth_phone=os.getenv("STEALTH_PHONE", ""),
+        stealth_session_string=os.getenv("STEALTH_SESSION_STRING", ""),
         channel_username=os.getenv("CHANNEL_USERNAME", ""),
         admin_user_id=int(os.getenv("ADMIN_USER_ID", "0")),
         target_stealth_groups=[g.strip() for g in os.getenv("TARGET_STEALTH_GROUPS", "").split(",") if g.strip()],
-        x_api_key=os.getenv("X_API_KEY", ""),
-        x_api_secret=os.getenv("X_API_SECRET", ""),
-        x_access_token=os.getenv("X_ACCESS_TOKEN", ""),
-        x_access_secret=os.getenv("X_ACCESS_SECRET", ""),
+        twitter_username=os.getenv("TWITTER_USERNAME", ""),
+        twitter_password=os.getenv("TWITTER_PASSWORD", ""),
+        twitter_email=os.getenv("TWITTER_EMAIL", ""),
         reddit_client_id=os.getenv("REDDIT_CLIENT_ID", ""),
         reddit_client_secret=os.getenv("REDDIT_CLIENT_SECRET", ""),
         reddit_username=os.getenv("REDDIT_USERNAME", ""),

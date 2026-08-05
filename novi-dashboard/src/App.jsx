@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect, Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { ChatGPTOrb } from './components/NoveSphere';
+import { ChatGPTOrb } from './components/NoviSphere';
 
 /* ═══════════════════════════════════════════════════════════════
    Groq AI Engine — Blazing fast inference + Generous free tier
@@ -15,7 +15,7 @@ async function callGroq(input, signal) {
     };
   }
 
-  const systemPrompt = `You are NOVE — a futuristic AI assistant built for Abdullah.
+  const systemPrompt = `You are NOVI — a futuristic AI assistant built for Abdullah.
 You are the SOLE control interface for the "Daily Pulse" omni-channel content bot system.
 
 == YOUR ARCHITECTURE ==
@@ -73,20 +73,16 @@ Keys:
 10. You cover International News, Crypto, Tech, Business, and Pakistani news — NOT just Pakistani news.`;
 
   try {
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    const res = await fetch(`${API_BASE}/api/chat`, {
       method: 'POST',
       signal,
       headers: {
-        Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'llama-3.1-8b-instant',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: input },
-        ],
-        temperature: 0.7,
+        api_key: apiKey,
+        systemPrompt: systemPrompt,
+        input: input
       }),
     });
 
@@ -104,8 +100,19 @@ Keys:
     }
 
     const data = await res.json();
+    
+    if (data.error) {
+      console.error("Backend Proxy Error:", data.error.message);
+      return {
+        display: [{ type: 'text', value: 'API Proxy Error: ' + data.error.message }],
+        layout: 'center',
+        reply: 'The backend proxy encountered an error: ' + data.error.message,
+      };
+    }
+
     if (!data.choices?.[0]) {
-      return { display: [], layout: 'right', reply: 'I received an empty response.' };
+      console.error("Empty response data:", data);
+      return { display: [], layout: 'right', reply: 'I received an empty response from the AI.' };
     }
 
     let content = data.choices[0].message.content.trim();
@@ -131,10 +138,11 @@ Keys:
     }
   } catch (error) {
     if (error.name === 'AbortError') return null;
+    console.error("Groq fetch error:", error);
     return {
-      display: [{ type: 'text', value: 'Network unreachable' }],
+      display: [{ type: 'text', value: 'Network error: ' + error.message }],
       layout: 'center',
-      reply: 'I lost connection. Please check your internet.',
+      reply: 'I lost connection. The network error is: ' + error.message,
     };
   }
 }
@@ -324,8 +332,8 @@ function App() {
             const trimmed = final.trim();
             const lowerTrimmed = trimmed.toLowerCase();
             
-            // Wake word detection: "NOVI" or "NOVE"
-            const hasWakeWord = lowerTrimmed.includes('novi') || lowerTrimmed.includes('nove') || lowerTrimmed.includes('no v');
+            // Wake word detection: "NOVI" or "NOVI"
+            const hasWakeWord = lowerTrimmed.includes('novi') || lowerTrimmed.includes('novi') || lowerTrimmed.includes('no v');
             
             // If voice is paused and wake word is spoken, re-enable
             if (voicePausedRef.current && hasWakeWord) {
@@ -334,7 +342,7 @@ function App() {
               setStatus('LISTENING');
               setSubtitle('Wake word detected! Listening...');
               // Strip the wake word and process the rest as a command
-              let command = trimmed.replace(/\b(novi|nove|no v)\b/gi, '').trim();
+              let command = trimmed.replace(/\b(novi|novi|no v)\b/gi, '').trim();
               if (command.length >= 5) {
                 handleCommand(command);
               }
@@ -347,7 +355,7 @@ function App() {
             const words = trimmed.split(/\s+/).length;
             if (words >= 2 || trimmed.length >= 5) {
               // Strip wake word prefix from command if present
-              let command = trimmed.replace(/\b(novi|nove|no v)\b/gi, '').trim();
+              let command = trimmed.replace(/\b(novi|novi|no v)\b/gi, '').trim();
               if (!command) command = trimmed;
               setSubtitle(command);
               handleCommand(command);
@@ -358,7 +366,11 @@ function App() {
         }
       };
 
-      rec.onerror = () => setIsListening(false);
+      rec.onerror = (e) => {
+        console.error('Recognition error:', e.error);
+        setIsListening(false);
+        setSubtitle('Mic Error: ' + e.error + ' (Check site settings)');
+      };
 
       rec.onend = () => {
         setIsListening(false);
@@ -666,7 +678,7 @@ function App() {
 
     setTimeout(() => {
       try { recRef.current?.start(); } catch (_) { }
-      speak('Nove is online.');
+      speak('Novi is online.');
     }, 600);
   }, [initRecognition, speak]);
 
@@ -713,7 +725,7 @@ function App() {
       <div className="ui-layer">
         <header className="header">
           <h1 className="logo">
-            NOVE
+            NOVI
             {initialized && (
               <span className={`status-badge status-${status.toLowerCase()}`}>
                 <span className="pulse-dot" />
@@ -770,15 +782,30 @@ function App() {
                 id="stealth-toggle-btn"
                 className="control-btn"
                 onClick={async () => {
+                  setSubtitle('Toggling Stealth Marketer...');
                   try {
                     const res = await fetch(`${API_BASE}/api/stealth/toggle`, { method: 'POST' });
                     if (res.ok) {
                       const data = await res.json();
+                      const msg = data.active 
+                        ? '🟢 Stealth Marketer ACTIVATED.'
+                        : '🔴 Stealth Marketer DEACTIVATED.';
+                      setSubtitle(msg);
                       speak(data.active 
                         ? 'Stealth Marketer activated, Abdullah.'
                         : 'Stealth Marketer deactivated.');
+                      
+                      // Also show it in the data panel
+                      setHasData(true);
+                      setDisplayItems([
+                        { type: 'heading', value: data.active ? '🟢 STEALTH: ACTIVE' : '🔴 STEALTH: OFFLINE' },
+                        { type: 'highlight', value: msg }
+                      ]);
+                      setPanelLayout('center');
+                      moveSphere(true, 'center');
                     }
                   } catch (err) {
+                    setSubtitle('Error: Cannot reach backend server.');
                     speak('Cannot reach the backend server.');
                   }
                 }}

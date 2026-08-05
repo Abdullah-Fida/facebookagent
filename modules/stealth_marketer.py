@@ -9,7 +9,7 @@ SECURITY ARCHITECTURE:
 - Randomized device fingerprint to mimic a real phone.
 - Graceful disconnect on shutdown (mimics closing the app normally).
 - Auto-kill on any suspicious Telegram response.
-- Full kill switch via frontend toggle and NOVE voice command.
+- Full kill switch via frontend toggle and NOVI voice command.
 """
 import logging
 import asyncio
@@ -75,13 +75,14 @@ class StealthMarketer:
     - Never adds more than 2 users per day.
     - Randomized delays between all actions.
     - Auto-kills on any suspicious Telegram error.
-    - Can be instantly disabled via frontend toggle or NOVE voice command.
+    - Can be instantly disabled via frontend toggle or NOVI voice command.
     """
 
     def __init__(self, api_id: int, api_hash: str, stealth_phone: str,
                  ai_engine: Any, brain: Any, channel_username: str,
                  target_groups: list, engagement_rate: float = 0.01,
-                 notification_manager: Any = None, db: Any = None):
+                 notification_manager: Any = None, db: Any = None,
+                 session_string: str = ""):
         self.api_id = api_id
         self.api_hash = api_hash
         self.phone = stealth_phone
@@ -92,6 +93,7 @@ class StealthMarketer:
         self.engagement_rate = engagement_rate
         self.nm = notification_manager
         self.db = db
+        self.session_string = session_string
 
         self.client = None
         self._active = False          # Master kill switch
@@ -115,16 +117,22 @@ class StealthMarketer:
 
     async def connect(self):
         """Initializes its own Telethon client using the stealth burner phone."""
-        if not self.api_id or not self.api_hash or not self.phone:
+        if not self.api_id or not self.api_hash:
             logger.warning("Stealth Marketer credentials missing. It will not function.")
             return
 
-        session_path = os.path.join(os.path.dirname(__file__), "..", "sessions", "stealth")
-        os.makedirs(os.path.dirname(session_path), exist_ok=True)
+        from telethon.sessions import StringSession
+
+        if self.session_string:
+            session = StringSession(self.session_string)
+        else:
+            session_path = os.path.join(os.path.dirname(__file__), "..", "sessions", "stealth")
+            os.makedirs(os.path.dirname(session_path), exist_ok=True)
+            session = session_path
 
         try:
             self.client = TelegramClient(
-                session_path,
+                session,
                 self.api_id,
                 self.api_hash,
                 device_model=self._device["model"],
@@ -579,7 +587,7 @@ Keep it under 3 sentences."""
             await asyncio.sleep(wait_time + random.uniform(5, 15))
 
     async def join_group(self, group_username: str) -> bool:
-        """Allows NOVE to command the bot to join a new group for monitoring."""
+        """Allows NOVI to command the bot to join a new group for monitoring."""
         if not self.client or not self._active:
             return False
 

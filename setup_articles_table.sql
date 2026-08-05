@@ -10,7 +10,7 @@ CREATE TABLE public.articles (
     category TEXT DEFAULT 'News',
     seo_keywords TEXT[],
     published_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    author TEXT DEFAULT 'NOVE NewsAgent'
+    author TEXT DEFAULT 'NOVI NewsAgent'
 );
 
 -- Allow anonymous read access so the website can fetch articles
