@@ -76,6 +76,7 @@ async def main():
         sender_email=config.email_sender,
         app_password=config.email_app_password,
         receiver_email=config.email_receiver,
+        resend_api_key=config.resend_api_key,
         db=db
     )
     

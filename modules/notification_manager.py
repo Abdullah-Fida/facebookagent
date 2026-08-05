@@ -31,9 +31,10 @@ class NotificationManager:
     Requires a Gmail App Password (not your regular password).
     """
     def __init__(self, sender_email: str, app_password: str, receiver_email: str,
-                 whatsapp_phone: str = "", whatsapp_api_key: str = "", db=None):
+                 resend_api_key: str = "", whatsapp_phone: str = "", whatsapp_api_key: str = "", db=None):
         self.sender_email = sender_email
         self.app_password = app_password
+        self.resend_api_key = resend_api_key
         # If receiver is empty, send to self
         self.receiver_email = receiver_email if receiver_email else sender_email
         self.whatsapp_phone = whatsapp_phone
@@ -43,10 +44,10 @@ class NotificationManager:
         self.smtp_server = "smtp.gmail.com"
         self.smtp_port = 587
 
-        if not self.sender_email or not self.app_password:
+        if not self.sender_email and not self.resend_api_key:
             logger.warning("Email credentials missing. Notifications will only be logged locally.")
         else:
-            logger.info(f"NotificationManager ready. Sender: {self.sender_email}, Receiver: {self.receiver_email}")
+            logger.info(f"NotificationManager ready. Receiver: {self.receiver_email} (Using {'Resend API' if self.resend_api_key else 'SMTP'})")
 
     # ═══════════════════════════════════════════════════════════
     #  CORE EMAIL SENDER
@@ -81,27 +82,47 @@ class NotificationManager:
 
     def _send_email_sync(self, full_subject: str, html_body: str) -> bool:
         """
-        Synchronous SMTP send. Runs in a thread via asyncio.to_thread
-        so it never blocks the async event loop.
+        Synchronous email send. Prioritizes Resend API (HTTP port 443, allowed on Render Free).
+        Falls back to SMTP if Resend is not configured.
         """
         try:
-            msg = MIMEMultipart("alternative")
-            msg['From'] = f"NOVI Bot <{self.sender_email}>"
-            msg['To'] = self.receiver_email
-            msg['Subject'] = full_subject
+            if self.resend_api_key:
+                import requests
+                headers = {
+                    "Authorization": f"Bearer {self.resend_api_key}",
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "from": "NOVI Bot <onboarding@resend.dev>",
+                    "to": self.receiver_email,
+                    "subject": full_subject,
+                    "html": html_body
+                }
+                resp = requests.post("https://api.resend.com/emails", json=payload, headers=headers, timeout=15)
+                if resp.status_code in (200, 201):
+                    logger.info(f"Email sent successfully via Resend to {self.receiver_email}")
+                    return True
+                else:
+                    logger.error(f"Resend API Failed: {resp.status_code} {resp.text}")
+                    return False
+            else:
+                msg = MIMEMultipart("alternative")
+                msg['From'] = f"NOVI Bot <{self.sender_email}>"
+                msg['To'] = self.receiver_email
+                msg['Subject'] = full_subject
 
-            msg.attach(MIMEText(html_body, 'html'))
+                msg.attach(MIMEText(html_body, 'html'))
 
-            server = smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=15)
-            server.ehlo()
-            server.starttls()
-            server.ehlo()
-            server.login(self.sender_email, self.app_password)
-            server.send_message(msg)
-            server.quit()
+                server = smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=15)
+                server.ehlo()
+                server.starttls()
+                server.ehlo()
+                server.login(self.sender_email, self.app_password)
+                server.send_message(msg)
+                server.quit()
 
-            logger.info(f"Email sent successfully to {self.receiver_email}")
-            return True
+                logger.info(f"Email sent successfully via SMTP to {self.receiver_email}")
+                return True
 
         except smtplib.SMTPAuthenticationError as e:
             logger.error(f"SMTP Authentication Failed — check your App Password: {e}")
@@ -151,7 +172,7 @@ class NotificationManager:
         email_success = False
 
         # Send Email (non-blocking via thread)
-        if self.sender_email and self.app_password:
+        if self.resend_api_key or (self.sender_email and self.app_password):
             email_success = await asyncio.to_thread(self._send_email_sync, full_subject, html)
 
         return email_success
@@ -177,7 +198,7 @@ class NotificationManager:
         html = self._build_html_email("Post Published to Telegram", body, accent_color="#238636")
         full_subject = f"✅ [POST] Daily Pulse — {subject}"
 
-        if self.sender_email and self.app_password:
+        if self.resend_api_key or (self.sender_email and self.app_password):
             await asyncio.to_thread(self._send_email_sync, full_subject, html)
 
     async def notify_error(self, module: str, error: Exception, auto_fixed: bool = False, fix_action: str = ""):
@@ -204,7 +225,7 @@ class NotificationManager:
         full_subject = f"{prefix} [ERROR] Daily Pulse — {module}: {type(error).__name__}"
         html = self._build_html_email(f"Error in {module}", body, accent_color=status_color)
 
-        if self.sender_email and self.app_password:
+        if self.resend_api_key or (self.sender_email and self.app_password):
             await asyncio.to_thread(self._send_email_sync, full_subject, html)
 
     async def notify_module_status(self, module_name: str, status: str, details: str = ""):
@@ -222,7 +243,7 @@ class NotificationManager:
         full_subject = f"{icon} [MODULE] Daily Pulse — {module_name}: {status.upper()}"
         html = self._build_html_email(f"{module_name} Status Change", body, accent_color=color)
 
-        if self.sender_email and self.app_password:
+        if self.resend_api_key or (self.sender_email and self.app_password):
             await asyncio.to_thread(self._send_email_sync, full_subject, html)
 
     async def notify_strategy_change(self, change_type: str, old_value: str, new_value: str, reason: str = ""):
@@ -241,7 +262,7 @@ class NotificationManager:
         full_subject = f"📊 [STRATEGY] Daily Pulse — {change_type}: {old_value} → {new_value}"
         html = self._build_html_email("Strategy Update", body, accent_color="#6366f1")
 
-        if self.sender_email and self.app_password:
+        if self.resend_api_key or (self.sender_email and self.app_password):
             await asyncio.to_thread(self._send_email_sync, full_subject, html)
 
     async def notify_connection_status(self, service: str, connected: bool, details: str = ""):
@@ -259,7 +280,7 @@ class NotificationManager:
         full_subject = f"{icon} [CONNECTION] Daily Pulse — {service}: {status}"
         html = self._build_html_email(f"{service} Connection Status", body, accent_color=color)
 
-        if self.sender_email and self.app_password:
+        if self.resend_api_key or (self.sender_email and self.app_password):
             await asyncio.to_thread(self._send_email_sync, full_subject, html)
 
     async def notify_stealth_step(self, action: str, details: str = "", success: bool = True):
@@ -276,5 +297,5 @@ class NotificationManager:
         full_subject = f"{icon} [STEALTH] Daily Pulse — {action}"
         html = self._build_html_email(f"Stealth Marketer: {action}", body, accent_color=color)
 
-        if self.sender_email and self.app_password:
+        if self.resend_api_key or (self.sender_email and self.app_password):
             await asyncio.to_thread(self._send_email_sync, full_subject, html)

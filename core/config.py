@@ -57,9 +57,9 @@ class BotConfig:
     email_sender: str = ""
     email_app_password: str = ""
     email_receiver: str = ""
+    resend_api_key: str = ""
     whatsapp_phone: str = ""
     whatsapp_api_key: str = ""
-
 
 def load_config() -> BotConfig:
     """Loads configuration from .env file and returns a BotConfig object."""
@@ -105,6 +105,7 @@ def load_config() -> BotConfig:
         email_sender=os.getenv("EMAIL_SENDER", ""),
         email_app_password=os.getenv("EMAIL_APP_PASSWORD", ""),
         email_receiver=os.getenv("EMAIL_RECEIVER", ""),
+        resend_api_key=os.getenv("RESEND_API_KEY", ""),
         whatsapp_phone=os.getenv("WHATSAPP_PHONE", ""),
         whatsapp_api_key=os.getenv("WHATSAPP_API_KEY", ""),
     )
