@@ -73,23 +73,32 @@ async def main():
         try:
             logger.info("Starting content production cycle...")
             
-            # Add human jitter (disabled for immediate testing)
-            jitter = 0
-            logger.info(f"Applying human jitter: waiting {jitter:.0f}s before posting...")
-            await asyncio.sleep(jitter)
+            max_daily_retries = 3
+            success = False
             
-            # Produce content
-            package = await content_engine.produce_content_package()
-            
-            if package:
-                # Broadcast to Facebook
-                success = await broadcaster.post(package)
-                if success:
-                    logger.info("Post published successfully to Facebook!")
+            for attempt in range(max_daily_retries):
+                logger.info(f"Attempt {attempt + 1} of {max_daily_retries} to produce and post content...")
+                
+                # Produce content
+                package = await content_engine.produce_content_package()
+                
+                if package:
+                    # Broadcast to Facebook
+                    success = await broadcaster.post(package)
+                    if success:
+                        logger.info("Post published successfully to Facebook!")
+                        break  # Break out of retry loop on success
+                    else:
+                        logger.error("Failed to post to Facebook.")
                 else:
-                    logger.error("Failed to post to Facebook.")
-            else:
-                logger.warning("Content engine returned empty package.")
+                    logger.warning("Content engine returned empty package.")
+                
+                if not success and attempt < max_daily_retries - 1:
+                    logger.info("Retrying in 60 seconds...")
+                    await asyncio.sleep(60)
+            
+            if not success:
+                logger.error("All attempts to produce/post content failed for this cycle.")
                 
             logger.info(f"Cycle complete. Sleeping for {sleep_interval/3600:.1f} hours...")
             await asyncio.sleep(sleep_interval)
