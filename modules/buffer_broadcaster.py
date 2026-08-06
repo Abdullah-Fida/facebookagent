@@ -30,8 +30,8 @@ class BufferBroadcaster:
             
             image_url = None
             if image_path:
-                logger.info("Uploading image to temporary public host (Catbox.moe)...")
-                image_url = self._upload_image_to_catbox(image_path)
+                logger.info("Uploading image to temporary public host (Uguu.se)...")
+                image_url = self._upload_image_to_uguu(image_path)
                 if not image_url:
                     logger.error("Failed to host image. Proceeding with text-only post.")
             
@@ -41,24 +41,24 @@ class BufferBroadcaster:
             logger.error(f"Failed to post to Buffer: {e}")
             return False
 
-    def _upload_image_to_catbox(self, image_path: str) -> str:
-        """Uploads a local image to Catbox.moe to get a public URL for Buffer."""
+    def _upload_image_to_uguu(self, image_path: str) -> str:
+        """Uploads a local image to Uguu.se to get a public URL for Buffer."""
         try:
             with open(image_path, "rb") as f:
                 resp = requests.post(
-                    "https://catbox.moe/user/api.php",
-                    data={"reqtype": "fileupload"},
-                    files={"fileToUpload": f},
+                    "https://uguu.se/upload.php",
+                    files={"files[]": f},
                     timeout=30
                 )
             resp.raise_for_status()
-            url = resp.text.strip()
-            if url.startswith("http"):
+            data = resp.json()
+            if data.get("success") and data.get("files"):
+                url = data["files"][0]["url"]
                 logger.info(f"Image hosted successfully at {url}")
                 return url
             return None
         except Exception as e:
-            logger.error(f"Error uploading image to Catbox: {e}")
+            logger.error(f"Error uploading image to Uguu: {e}")
             return None
 
     def _get_channel_id(self) -> str:
@@ -133,7 +133,12 @@ class BufferBroadcaster:
                 "text": text,
                 "mode": "shareNow",
                 "needsApproval": False,
-                "schedulingType": "automatic"
+                "schedulingType": "automatic",
+                "metaData": {
+                    "facebook": {
+                        "type": "post"
+                    }
+                }
             }
         }
         
