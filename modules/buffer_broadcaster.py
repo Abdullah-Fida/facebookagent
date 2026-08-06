@@ -122,7 +122,7 @@ class BufferBroadcaster:
         mutation = """
         mutation CreatePost($input: CreatePostInput!) {
           createPost(input: $input) {
-            post { id }
+            __typename
           }
         }
         """
