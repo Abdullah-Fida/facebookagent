@@ -19,9 +19,8 @@ class BotConfig:
     huggingface_api_key: str = ""
     bing_cookie: str = ""
     
-    # Facebook
-    facebook_page_id: str = ""
-    facebook_access_token: str = ""
+    # Buffer
+    buffer_access_token: str = ""
     
     # Scheduling
     posts_per_day: int = 5
@@ -43,8 +42,7 @@ def load_config() -> BotConfig:
         openrouter_api_keys=api_keys,
         huggingface_api_key=os.getenv("HUGGINGFACE_API_KEY", ""),
         bing_cookie=os.getenv("BING_COOKIE", ""),
-        facebook_page_id=os.getenv("FACEBOOK_PAGE_ID", ""),
-        facebook_access_token=os.getenv("FACEBOOK_ACCESS_TOKEN", ""),
+        buffer_access_token=os.getenv("BUFFER_ACCESS_TOKEN", ""),
         posts_per_day=int(os.getenv("POSTS_PER_DAY", "5")),
     )
     

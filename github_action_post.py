@@ -5,7 +5,7 @@ from core.config import load_config
 from core.ai_engine import AIEngine
 from modules.image_generator import ImageGenerator
 from modules.content_engine import ContentEngine
-from modules.facebook_broadcaster import FacebookBroadcaster
+from modules.buffer_broadcaster import BufferBroadcaster
 
 async def run_single_post():
     print("Loading config...")
@@ -17,9 +17,8 @@ async def run_single_post():
     image_gen = ImageGenerator(output_dir=images_dir, channel_name="Stories", bing_cookie=config.bing_cookie)
     content_engine = ContentEngine(ai_engine=ai_engine, image_gen=image_gen)
     
-    broadcaster = FacebookBroadcaster(
-        page_id=config.facebook_page_id,
-        access_token=config.facebook_access_token
+    broadcaster = BufferBroadcaster(
+        buffer_access_token=config.buffer_access_token
     )
     
     print("Generating new unique AI story and image...")
@@ -29,11 +28,11 @@ async def run_single_post():
         print("Failed to generate content package.")
         sys.exit(1)
         
-    print(f"Attempting to post to Facebook Page: {config.facebook_page_id}")
+    print(f"Attempting to post to Buffer Queue...")
     success = await broadcaster.post(package)
     
     if success:
-        print("✅ SUCCESS! The post is live on your Facebook Page!")
+        print("✅ SUCCESS! The post has been added to your Buffer Queue!")
         sys.exit(0)
     else:
         print("❌ FAILED! Check logs for errors.")
