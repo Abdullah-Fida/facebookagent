@@ -112,29 +112,68 @@ class ImageGenerator:
         os.makedirs(output_dir, exist_ok=True)
         logger.info(f"Image Generator initialized. Output: {output_dir}")
     
-    def _fetch_pollinations_image(self, prompt: str) -> Optional[Image.Image]:
+    def _fetch_bing_image(self, prompt: str) -> Optional[Image.Image]:
         """
-        Calls Pollinations AI to generate an image.
+        Calls Bing Image Creator (DALL-E 3) to generate an image.
         Returns a PIL Image or None on failure.
         """
-        import urllib.request
-        import urllib.parse
-        import io
-        
-        # URL encode the prompt
-        encoded_prompt = urllib.parse.quote(prompt)
-        # Use nologo=true to get a clean image without watermarks
-        url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={self.width}&height={self.height}&nologo=true"
-        
-        try:
-            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req, timeout=45) as response:
-                data = response.read()
-                img = Image.open(io.BytesIO(data)).convert("RGB")
-                return img
-        except Exception as e:
-            logger.warning(f"Pollinations Image generation failed: {e}")
+        if not self.bing_cookie:
+            logger.error("No Bing cookie provided.")
             return None
+            
+        import asyncio
+        from BingImageCreator import ImageGenAsync
+        
+        async def fetch():
+            async_gen = ImageGenAsync(self.bing_cookie)
+            try:
+                images = await async_gen.get_images(prompt)
+                logger.info(f"Bing Image URLs: {images}")
+                if not images:
+                    return None
+                
+                # Try finding the first valid OIG image, fallback to first if none
+                img_url = images[0]
+                for url in images:
+                    if "OIG" in url or "mm.bing.net" in url:
+                        img_url = url
+                        break
+                        
+                req = urllib.request.Request(img_url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req, timeout=30) as response:
+                    data = response.read()
+                    img = Image.open(io.BytesIO(data)).convert("RGB")
+                    
+                    # Bing images are 1024x1024. Resize and crop to 1280x720
+                    img = img.resize((self.width, self.width), Image.Resampling.LANCZOS)
+                    top = (self.width - self.height) // 2
+                    bottom = top + self.height
+                    img = img.crop((0, top, self.width, bottom))
+                    return img
+            except Exception as e:
+                logger.warning(f"Bing Image generation failed: {e}")
+                return None
+                
+        # Run the async function synchronously
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+        if loop.is_running():
+            # If we're already in an async context, this might fail, but ImageGenerator is run in a thread usually.
+            import threading
+            result = None
+            def run_in_thread():
+                nonlocal result
+                result = asyncio.run(fetch())
+            t = threading.Thread(target=run_in_thread)
+            t.start()
+            t.join()
+            return result
+        else:
+            return loop.run_until_complete(fetch())
 
     def _create_gradient(self, draw: ImageDraw.Draw, 
                          color_start: tuple, color_end: tuple):
@@ -258,28 +297,28 @@ class ImageGenerator:
             )
             
             # ── Step 1: Fetch AI Background ───────────────────────
-            max_retries = 3
+            max_retries = 2
             retry_delay = 5
             img = None
             
             for attempt in range(max_retries):
-                img = self._fetch_pollinations_image(ai_prompt)
+                img = self._fetch_bing_image(ai_prompt)
                 if img:
                     break
                 else:
                     if attempt < max_retries - 1:
-                        logger.warning(f"Pollinations fetch failed. Retrying in {retry_delay}s...")
+                        logger.warning(f"Bing Image fetch failed. Retrying in {retry_delay}s...")
                         time.sleep(retry_delay)
             
             # Fallback to gradient if AI image failed
             if not img:
-                logger.warning("AI image failed completely, using gradient fallback.")
+                logger.warning("Bing AI image failed, using gradient fallback.")
                 img = Image.new("RGB", (self.width, self.height))
                 draw = ImageDraw.Draw(img)
                 self._create_gradient(draw, palette["gradient_start"], palette["gradient_end"])
                 self._add_decorative_elements(draw, palette["accent"])
             else:
-                logger.info("Successfully fetched pure AI background from Pollinations.")
+                logger.info("Successfully fetched pure AI background from Bing DALL-E 3.")
             
             # ── Step 2: Save Pure Image ──────────────────────────────────────
             filename = f"post_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{random.randint(100,999)}.png"
