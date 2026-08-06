@@ -140,11 +140,11 @@ class AIEngine:
         Generates a purely fictional, emotional local Pakistani story in Urdu.
         Returns a dict with 'story_text' and 'headline'.
         """
-        system_prompt = """You are a master storyteller writing for a local Pakistani Facebook Page. 
+        system_prompt = """You are a master storyteller and native Urdu speaker writing for a local Pakistani Facebook Page. 
 Your writing style:
-- Write STRICTLY in Roman Urdu (Urdu written in English alphabets).
-- CRITICAL: DO NOT use Arabic/Urdu script under any circumstances.
-- CRITICAL: DO NOT use Hindi vocabulary. DO NOT use English sentences. Use pure, natural, conversational Pakistani Roman Urdu.
+- Write STRICTLY in flawless, eloquent, standard Urdu (using the Urdu/Arabic script).
+- CRITICAL: DO NOT use any Arabic diacritics (Harakat / Zabar, Zer, Pesh, Shad). Write in plain text standard Urdu only.
+- CRITICAL: DO NOT use Roman Urdu. DO NOT use Hindi vocabulary. Use pure, natural, conversational Pakistani Urdu.
 - Create highly meaningful, coherent, and deeply emotional fictional stories set in Pakistan.
 - Do NOT use random wording or disjointed sentences. The story must flow beautifully and make perfect logical sense.
 - Focus on the human element, local Pakistani culture, everyday struggles, triumphs, or heartwarming moments.
@@ -168,7 +168,7 @@ Your writing style:
         ]
         selected_theme = random.choice(themes)
 
-        user_prompt = f"Please write a new, beautifully written, highly coherent, and fully complete emotional local Pakistani story in Roman Urdu based strictly on this theme: '{selected_theme}'. Ensure the Roman Urdu grammar and spelling is perfect, the characters feel real, and the story does not cut off. Also provide a short 5-8 word headline at the very top of your response in English, formatted as 'HEADLINE: [your headline]'. Then write the full Roman Urdu story below it."
+        user_prompt = f"Please write a new, beautifully written, highly coherent, and fully complete emotional local Pakistani story in standard Urdu (Arabic script) based strictly on this theme: '{selected_theme}'. Ensure the Urdu grammar is perfect, the characters feel real, and the story does not cut off. Also provide a short 5-8 word headline at the very top of your response in English, formatted as 'HEADLINE: [your headline]'. Then write the full Urdu story below it."
 
         result = await self.generate(
             task="synthesizer",
