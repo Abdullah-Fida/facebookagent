@@ -32,10 +32,10 @@ async def run_single_post():
     success = await broadcaster.post(package)
     
     if success:
-        print("✅ SUCCESS! The post has been added to your Buffer Queue!")
+        print("SUCCESS! The post has been added to your Buffer Queue!")
         sys.exit(0)
     else:
-        print("❌ FAILED! Check logs for errors.")
+        print("FAILED! Check logs for errors.")
         sys.exit(1)
 
 if __name__ == "__main__":

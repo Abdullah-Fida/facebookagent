@@ -119,27 +119,28 @@ class BufferBroadcaster:
             "Content-Type": "application/json"
         }
         
-        assets_part = ""
-        if image_url:
-            assets_part = f'assets: [{{image: {{url: "{image_url}"}}}}]'
-            
-        # We omit schedulingType and let it default to the queue
-        mutation = f"""
-        mutation {{
-          createPost(input: {{
-            channelId: "{channel_id}"
-            text: "{text.replace('"', '\\"').replace('\\n', '\\\\n')}"
-            mode: addToQueue
-            needsApproval: false
-            {assets_part}
-          }}) {{
-            __typename
-          }}
-        }}
+        mutation = """
+        mutation CreatePost($input: CreatePostInput!) {
+          createPost(input: $input) {
+            post { id }
+          }
+        }
         """
         
+        variables = {
+            "input": {
+                "channelId": channel_id,
+                "text": text,
+                "mode": "addToQueue",
+                "needsApproval": False
+            }
+        }
+        
+        if image_url:
+            variables["input"]["assets"] = [{"image": {"url": image_url}}]
+        
         logger.info("Sending post to Buffer Queue...")
-        resp = requests.post(self.base_url, headers=headers, json={"query": mutation})
+        resp = requests.post(self.base_url, headers=headers, json={"query": mutation, "variables": variables})
         resp.raise_for_status()
         
         result = resp.json()
