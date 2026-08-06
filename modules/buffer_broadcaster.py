@@ -132,7 +132,8 @@ class BufferBroadcaster:
                 "channelId": channel_id,
                 "text": text,
                 "mode": "addToQueue",
-                "needsApproval": False
+                "needsApproval": False,
+                "schedulingType": "automatic"
             }
         }
         

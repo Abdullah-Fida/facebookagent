@@ -1,11 +1,17 @@
 import requests
+import json
 
-with open("test.jpg", "wb") as f:
-    f.write(b"dummy image data")
-
-resp = requests.post(
-    "https://catbox.moe/user/api.php",
-    data={"reqtype": "fileupload"},
-    files={"fileToUpload": open("test.jpg", "rb")}
-)
+token = "04f993lGn4T2nrTFdVrewpOJJZzUVURXsDlwYSi7Xg6"
+headers = {
+    "Authorization": f"Bearer {token}",
+    "Content-Type": "application/json"
+}
+query = """
+query {
+  __type(name: "SchedulingType") {
+    enumValues { name }
+  }
+}
+"""
+resp = requests.post("https://api.buffer.com/", headers=headers, json={"query": query})
 print(resp.text)
