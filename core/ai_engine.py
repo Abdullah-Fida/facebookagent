@@ -11,9 +11,9 @@ logger = logging.getLogger("OmniBot.AI")
 
 # Model assignments for different tasks
 MODELS = {
-    "synthesizer": "openrouter/free",
-    "headline":    "openrouter/free",
-    "stealth":     "openrouter/free",
+    "synthesizer": "meta-llama/llama-3-8b-instruct:free",
+    "headline":    "meta-llama/llama-3-8b-instruct:free",
+    "stealth":     "meta-llama/llama-3-8b-instruct:free",
 }
 
 
@@ -86,7 +86,7 @@ class AIEngine:
         if current_key.startswith("gsk_"):
             model = "llama-3.3-70b-versatile"
         else:
-            model = MODELS.get(task, "openrouter/free")
+            model = MODELS.get(task, "meta-llama/llama-3-8b-instruct:free")
             
         attempts = 0
         max_attempts = len(self.api_keys) * 2  # Try each key up to twice
@@ -123,7 +123,7 @@ class AIEngine:
                     logger.warning("Authentication failed. Rotating API key...")
                 elif "404" in error_msg:
                     logger.warning(f"Model '{model}' not found. Trying fallback...")
-                    model = "openrouter/free"  # Fallback to a highly reliable model
+                    model = "meta-llama/llama-3-8b-instruct:free"  # Fallback to a highly reliable model
                 
                 has_more_keys = self._rotate_key()
                 attempts += 1
@@ -142,12 +142,9 @@ class AIEngine:
         """
         system_prompt = """You are a master storyteller and native Urdu speaker writing for a local Pakistani Facebook Page. 
 Your writing style:
-- Write STRICTLY in flawless, eloquent, standard Urdu (using ONLY the standard Urdu alphabet: ا ب پ ت ٹ ث ج چ ح خ...).
-- CRITICAL: DO NOT use any Arabic diacritics (Harakat / Zabar, Zer, Pesh, Shad). Write in plain text standard Urdu only.
-- CRITICAL: DO NOT use Roman Urdu. DO NOT use Hindi vocabulary.
-- CRITICAL: ABSOLUTELY NO English words in the story body (e.g., do not write "pain" when you mean "درد").
-- CRITICAL: ABSOLUTELY NO Devanagari (Hindi) script. ABSOLUTELY NO Cyrillic or Russian script. If you use words like "समर्पण" or "благosi", the generation will fail. You must ONLY use the Urdu alphabet.
-- Ensure perfect Urdu spelling (e.g., write "محنت" not "مہنت", write "دعا" not gibberish).
+- Write strictly in flawless, eloquent, standard Urdu.
+- Use plain text standard Urdu only without any diacritics (Harakat).
+- Ensure perfect Urdu spelling. For example, for 'thank you', write 'شکریہ'. For 'pain/sadness', write 'درد' or 'غم'. Write 'محنت' not 'مہنت'.
 - Create highly meaningful, coherent, and deeply emotional fictional stories set in Pakistan.
 - Do NOT use random wording or disjointed sentences. The story must flow beautifully and make perfect logical sense.
 - Focus on the human element, local Pakistani culture, everyday struggles, triumphs, or heartwarming moments.
@@ -173,22 +170,55 @@ Your writing style:
 
         user_prompt = f"Please write a new, beautifully written, highly coherent, and fully complete emotional local Pakistani story in standard Urdu (Arabic script) based strictly on this theme: '{selected_theme}'. Ensure the Urdu grammar is perfect, the characters feel real, and the story does not cut off. Also provide a short 5-8 word headline at the very top of your response in English, formatted as 'HEADLINE: [your headline]'. Then write the full Urdu story below it."
 
-        result = await self.generate(
-            task="synthesizer",
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            max_tokens=3000,
-            temperature=0.3
-        )
+        import re
         
-        if not result:
+        # Validation loop: keep generating until we get a story with NO foreign characters
+        max_retries = 10
+        valid_story = False
+        
+        for attempt in range(max_retries):
+            result = await self.generate(
+                task="synthesizer",
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                max_tokens=3000,
+                temperature=0.3
+            )
+            
+            if not result:
+                return None
+                
+            # Check for Devanagari (Hindi) characters (Range: \u0900-\u097F)
+            if re.search(r'[\u0900-\u097F]', result):
+                logger.warning(f"Hallucination detected (Devanagari script) on attempt {attempt+1}. Retrying...")
+                continue
+                
+            # Check for Cyrillic/Russian characters (Range: \u0400-\u04FF)
+            if re.search(r'[\u0400-\u04FF]', result):
+                logger.warning(f"Hallucination detected (Cyrillic script) on attempt {attempt+1}. Retrying...")
+                continue
+                
+            # Strip the first line (HEADLINE) to check the body
+            lines = result.strip().split('\n')
+            body = "\n".join(lines[1:]) if len(lines) > 1 else result
+            
+            # Allow some basic English punctuation like ?, !, ., ,, -, _, etc., but block a-z A-Z
+            if re.search(r'[a-zA-Z]', body):
+                logger.warning(f"Hallucination detected (English letters in Urdu text) on attempt {attempt+1}. Retrying...")
+                continue
+                
+            # If it passes all checks, it's valid!
+            valid_story = True
+            break
+            
+        if not valid_story:
+            logger.error("Failed to generate a pure Urdu story without hallucinations after maximum retries.")
             return None
             
         # Parse out the headline
         headline = "Emotional Story"
         story_text = result.strip()
         
-        lines = result.strip().split('\n')
         if lines and lines[0].strip().startswith("HEADLINE:"):
             headline = lines[0].replace("HEADLINE:", "").strip()
             story_text = "\n".join(lines[1:]).strip()
