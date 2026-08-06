@@ -131,7 +131,7 @@ class BufferBroadcaster:
             "input": {
                 "channelId": channel_id,
                 "text": text,
-                "mode": "addToQueue",
+                "mode": "shareNow",
                 "needsApproval": False,
                 "schedulingType": "automatic"
             }
