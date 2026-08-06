@@ -134,7 +134,7 @@ class BufferBroadcaster:
                 "mode": "shareNow",
                 "needsApproval": False,
                 "schedulingType": "automatic",
-                "metaData": {
+                "metadata": {
                     "facebook": {
                         "type": "post"
                     }
